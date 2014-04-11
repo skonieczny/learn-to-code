@@ -1,0 +1,17 @@
+<h3>{{ game.name }}</h3>
+<ul>
+    <li ng-repeat="program in game.programsByScore()">
+    	<a href="#/program/{{ program.id }}">{{ program.name }}</a>
+    	by
+    	<a href="#/user/{{ program.author().id }}">{{ program.author().name }}</a>
+    	Scored: {{ program.score }}
+    </li>
+</ul>
+<div expandable="Add program" ng-controller="ProgramCreateForm">
+	<h4>Create program</h4>
+	<form>
+		<input type="text" ng-model="program.name">
+		<input type="hidden" ng-model="program.game" value="{{ game.id }}">	
+		<button ng-click="create()">Create</button>
+	</form>	
+</div>

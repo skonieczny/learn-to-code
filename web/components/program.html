@@ -1,0 +1,17 @@
+<h3>{{ program.name }}</h3>
+by
+<a href="#/user/{{ program.author().id }}">{{ program.author().name }}</a>
+Ready: {{ program.ready }}
+<ul>
+    <li ng-repeat="match in program.matchesFromNewest()">
+    	Match on {{ match.variant }}
+    	<a href="#/program/{{ match.program2.id }}">{{ match.program2.name }}</a>
+    	by
+    	<a href="#/user/{{ match.program2.author().id }}">{{ match.program2.author().name }}</a>
+    	against
+    	<a href="#/program/{{ match.program2.id }}">{{ match.program2.name }}</a>
+    	by
+    	<a href="#/user/{{ match.program2.author().id }}">{{ match.program2.author().name }}</a>
+    	Result: {{ match.score1 }}:{{ match.score2 }}
+    </li>
+</ul>

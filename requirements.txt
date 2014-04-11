@@ -1,0 +1,1 @@
+-e git://github.com/stanislaw-skonieczny/python-modulr#egg=modulr
