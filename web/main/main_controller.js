@@ -8,5 +8,5 @@ angular.module('myapp-main', ['ngRoute', 'db'])
       });
   })
   .controller('MainCtrl', function ($scope, db) {
-    $scope.games = [db.model('game', 'oix')];
+    $scope.games = [db.model('game', 'oix')];	
   });

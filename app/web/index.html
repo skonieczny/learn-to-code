@@ -8,7 +8,9 @@
     <link href="/static/app.css" rel="stylesheet">
   </head>
   <body ng-app="app">
+  	<div ng-show="message">Message: {{ message }}</div>
   	<a href="/">/</a>
+  	<a href="#register">Register</a>  	
     <div class="container" ng-view="">LOADING...</div>
     <script src="/static/lib.js"></script>
     <script src="/static/templates.js"></script>

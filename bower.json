@@ -3,7 +3,6 @@
   "main": "app.js",
   "version": "0.0.0",
   "authors": [
-    "jessie <jessie@apollo.com.ph>"
   ],
   "license": "MIT",
   "private": true,
@@ -15,9 +14,8 @@
     "tests"
   ],
   "devDependencies": {
-    "angular": "~1.2.14",
-    "angular-route": "~1.2.14"
-    "angular-resource": "~1.2.14"
+    "angular": "1.2.16",
+    "angular-route": "1.2.16",
+    "angular-resource": "1.2.16"
   }
 }
-

@@ -1,7 +1,9 @@
-<h3>{{ program.name }}</h3>
+<h3>{{ program.data.name }}</h3>
 by
-<a href="#/user/{{ program.author().id }}">{{ program.author().name }}</a>
-Ready: {{ program.ready }}
+<a href="#/user/{{ program.model.author().id }}">{{ program.model.author().data.name }}</a>
+Ready: {{ program.data.ready }}
+<a href="#/program/{{ program.id }}/edit">Edit</a>
+<h4>Matches</h4>
 <ul>
     <li ng-repeat="match in program.matchesFromNewest()">
     	Match on {{ match.variant }}

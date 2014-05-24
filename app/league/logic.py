@@ -1,19 +1,32 @@
+from google.appengine.ext import ndb
+
 from league.models import Program, Match, PendingMatch
 from utils.logic import NothingDone
+from league.compiling import compile_pr
 
 
 UNCHANGED = object()
 
 
-def create_program(actor, game_id, name):
-    program = Program(author=actor, game=game_id, name=name, ready=False, data='')
+def get_programs(actor, id=None, game=None, order=None):
+    ret = Program.query()
+    if not game is None:
+        ret = ret.filter(Program.game == game)
+    if not id is None:
+        ret = ret.filter(Program.key == ndb.Key(Program, int(id)))
+    return ret.fetch(100)
+
+
+def create_program(actor, game, name):
+    program = Program(author=actor.key, game=game, name=name, ready=False, data='')
     program.put()
     return program
 
 
-def update_program(actor, program_id, name=UNCHANGED, data=UNCHANGED, ready=UNCHANGED):
-    program = Program.get_by_id(program_id)
-    if program.author != actor:
+def update_program(actor, id, name=UNCHANGED, data=UNCHANGED, ready=UNCHANGED):
+    id = int(id)
+    program = Program.get_by_id(id)
+    if program.author != actor.key:
         return NothingDone('no-permissions')
     if name is not UNCHANGED:
         program.name = name
@@ -50,13 +63,25 @@ def update_program(actor, program_id, name=UNCHANGED, data=UNCHANGED, ready=UNCH
     return program
 
 
-def delete_program(actor, program_id):
-    program = Program.get_by_id(program_id)
+def delete_program(actor, id):
+    program = Program.get_by_id(id)
     if program.author != actor:
         return NothingDone('no-permissions')
     if program.ready is True:
         return NothingDone('can-not-delete-ready-program')
     program.delete()
+
+
+def compile_program(actor, id, data):
+    # TODO: validate actor and program
+    try:
+        code = compile_pr(data)
+    except SyntaxError, e:
+        return NothingDone('systax-error', lineno=e.lineno, offset=e.offset, text=e.text, value=str(e))
+    except TypeError, e:
+        # TODO: check!
+        return NothingDone(e.value)
+    return {'binary': code}
 
 
 def resolve_match(actor, pending_match_id, score1, score2):

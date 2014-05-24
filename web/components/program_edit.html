@@ -1,0 +1,18 @@
+<div ng-if="program.loaded">
+	<h3>{{ program.data.name }}</h3>
+	by
+	<a href="#/user/{{ program.model.author().id }}">{{ program.model.author().data.name }}</a>
+	
+	Game
+	<div ng-if="program.data.game == 'oix'">
+		OIX program
+	</div>
+	<form ng-controller="ProgramEditForm" style="float: left;">
+		<button ng-click="update()">Save</button>
+		<button ng-click="compile()">Compile</button>
+		<pre contenteditable="true" ng-model="program.data.data">empty</pre>
+	</form>
+	<div ng-include="'components/games/' + program.data.game + '/board.html'">BOARD</div>
+	Binary: 
+	<div>{{ program.data.binary }}</div>
+</div>
