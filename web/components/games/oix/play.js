@@ -7,13 +7,24 @@ module.controller('OIXGameBoardController', function($scope) {
 	
 	var OIXCode = function(binary, board) {
 		var self = this;
+		var stopped = true;
 		this.board = board;
-		this.vm = new window.VM(binary);
 		this.output = '';
-		this.vm.setPrinter(function(item) { self.output += item; });
 		this.step = function() {
 			return self.vm.step();
 		};
+
+		var move = function(x, y) {
+			if (x.__class__ !== 'int' || y.__class__ !== 'int') {
+				throw 'Function "move" arguments must be int. ';
+			}
+			self.board.set(x.value, y.value, 1);
+		};
+
+		this.vm = new window.PythonVM.VM(binary);
+		this.vm.setPrinter(function(item) { self.output += item; });
+		this.vm.addBuiltin('id', new window.PythonVM.PyInt(157));
+		this.vm.addBuiltin('move', new window.PythonVM.PyBuiltinFunction(move));
 	};
 	
 	var EMPTY = 0;
@@ -48,6 +59,7 @@ module.controller('OIXGameBoardController', function($scope) {
 	var variant = new OIXVariant('small', 3, 3, 3);
 	var board = new Board(variant.rows, variant.cols);
 	var code1 = null;
+	var breakRun = false;
 	
 	$scope.variant = variant;
 	$scope.board = board;
@@ -62,6 +74,7 @@ module.controller('OIXGameBoardController', function($scope) {
 	$scope.step = function() {
 		if (code1 === null) {
 			code1 = new OIXCode(program.data.binary, board);
+			code1.vm.addBuiltin('debugger', new window.PythonVM.PyBuiltinFunction(pdb));
 			$scope.output = code1.output;
 			$scope.is_running = true;
 			return;
@@ -75,10 +88,16 @@ module.controller('OIXGameBoardController', function($scope) {
 		$scope.output = code1.output;		
 	};
 
+	var pdb = function() {
+		breakRun = true;
+		return new window.PythonVM.PyInt(0);
+	};
+
 	$scope.run = function() {
+		breakRun = false;
 		do {
 			$scope.step();
-		} while ($scope.is_running);
+		} while ($scope.is_running && !breakRun);
 	};
 
 });

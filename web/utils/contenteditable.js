@@ -16,7 +16,7 @@ angular.module('contenteditable', []).directive('contenteditable', function() {
 			ngModel.$render = function() {
 				var html = ngModel.$viewValue;
 				html = html.replace(/\&/g, '&amp;');
-				html = html.replace(/\</g, '&lt;');
+				html = html.replace(/</g, '&lt;');
 				html = html.replace(/\>/g, '&gt;');
 				html = html.replace(/\"/g, '&quot;');
 				html = html.replace(/\n/g, '<br>');

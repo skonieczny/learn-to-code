@@ -10,7 +10,7 @@
 	<form ng-controller="ProgramEditForm" style="float: left;">
 		<button ng-click="update()">Save</button>
 		<button ng-click="compile()">Compile</button>
-		<pre contenteditable="true" ng-model="program.data.data">empty</pre>
+		<pre class="program_data" contenteditable="true" ng-model="program.data.data">empty</pre>
 	</form>
 	<div ng-include="'components/games/' + program.data.game + '/board.html'">BOARD</div>
 	Binary: 

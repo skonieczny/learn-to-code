@@ -385,7 +385,7 @@ angular.module('contenteditable', []).directive('contenteditable', function() {
 			ngModel.$render = function() {
 				var html = ngModel.$viewValue;
 				html = html.replace(/\&/g, '&amp;');
-				html = html.replace(/\</g, '&lt;');
+				html = html.replace(/</g, '&lt;');
 				html = html.replace(/\>/g, '&gt;');
 				html = html.replace(/\"/g, '&quot;');
 				html = html.replace(/\n/g, '<br>');
@@ -418,43 +418,61 @@ angular.module('contenteditable', []).directive('contenteditable', function() {
 	};
 }); 
 
+window.PythonVM = window.PythonVM || {};
 (function(exports) {
 
 	var opnames = ['STOP_CODE', 'POP_TOP', 'ROT_TWO', 'ROT_THREE', 'DUP_TOP', 'ROT_FOUR', '<6>', '<7>', '<8>', 'NOP', 'UNARY_POSITIVE', 'UNARY_NEGATIVE', 'UNARY_NOT', 'UNARY_CONVERT', '<14>', 'UNARY_INVERT', '<16>', '<17>', '<18>', 'BINARY_POWER', 'BINARY_MULTIPLY', 'BINARY_DIVIDE', 'BINARY_MODULO', 'BINARY_ADD', 'BINARY_SUBTRACT', 'BINARY_SUBSCR', 'BINARY_FLOOR_DIVIDE', 'BINARY_TRUE_DIVIDE', 'INPLACE_FLOOR_DIVIDE', 'INPLACE_TRUE_DIVIDE', 'SLICE+0', 'SLICE+1', 'SLICE+2', 'SLICE+3', '<34>', '<35>', '<36>', '<37>', '<38>', '<39>', 'STORE_SLICE+0', 'STORE_SLICE+1', 'STORE_SLICE+2', 'STORE_SLICE+3', '<44>', '<45>', '<46>', '<47>', '<48>', '<49>', 'DELETE_SLICE+0', 'DELETE_SLICE+1', 'DELETE_SLICE+2', 'DELETE_SLICE+3', 'STORE_MAP', 'INPLACE_ADD', 'INPLACE_SUBTRACT', 'INPLACE_MULTIPLY', 'INPLACE_DIVIDE', 'INPLACE_MODULO', 'STORE_SUBSCR', 'DELETE_SUBSCR', 'BINARY_LSHIFT', 'BINARY_RSHIFT', 'BINARY_AND', 'BINARY_XOR', 'BINARY_OR', 'INPLACE_POWER', 'GET_ITER', '<69>', 'PRINT_EXPR', 'PRINT_ITEM', 'PRINT_NEWLINE', 'PRINT_ITEM_TO', 'PRINT_NEWLINE_TO', 'INPLACE_LSHIFT', 'INPLACE_RSHIFT', 'INPLACE_AND', 'INPLACE_XOR', 'INPLACE_OR', 'BREAK_LOOP', 'WITH_CLEANUP', 'LOAD_LOCALS', 'RETURN_VALUE', 'IMPORT_STAR', 'EXEC_STMT', 'YIELD_VALUE', 'POP_BLOCK', 'END_FINALLY', 'BUILD_CLASS', 'STORE_NAME', 'DELETE_NAME', 'UNPACK_SEQUENCE', 'FOR_ITER', 'LIST_APPEND', 'STORE_ATTR', 'DELETE_ATTR', 'STORE_GLOBAL', 'DELETE_GLOBAL', 'DUP_TOPX', 'LOAD_CONST', 'LOAD_NAME', 'BUILD_TUPLE', 'BUILD_LIST', 'BUILD_SET', 'BUILD_MAP', 'LOAD_ATTR', 'COMPARE_OP', 'IMPORT_NAME', 'IMPORT_FROM', 'JUMP_FORWARD', 'JUMP_IF_FALSE_OR_POP', 'JUMP_IF_TRUE_OR_POP', 'JUMP_ABSOLUTE', 'POP_JUMP_IF_FALSE', 'POP_JUMP_IF_TRUE', 'LOAD_GLOBAL', '<117>', '<118>', 'CONTINUE_LOOP', 'SETUP_LOOP', 'SETUP_EXCEPT', 'SETUP_FINALLY', '<123>', 'LOAD_FAST', 'STORE_FAST', 'DELETE_FAST', '<127>', '<128>', '<129>', 'RAISE_VARARGS', 'CALL_FUNCTION', 'MAKE_FUNCTION', 'BUILD_SLICE', 'MAKE_CLOSURE', 'LOAD_CLOSURE', 'LOAD_DEREF', 'STORE_DEREF', '<138>', '<139>', 'CALL_FUNCTION_VAR', 'CALL_FUNCTION_KW', 'CALL_FUNCTION_VAR_KW', 'SETUP_WITH', '<144>', 'EXTENDED_ARG', 'SET_ADD', 'MAP_ADD', '<148>', '<149>', '<150>', '<151>', '<152>', '<153>', '<154>', '<155>', '<156>', '<157>', '<158>', '<159>', '<160>', '<161>', '<162>', '<163>', '<164>', '<165>', '<166>', '<167>', '<168>', '<169>', '<170>', '<171>', '<172>', '<173>', '<174>', '<175>', '<176>', '<177>', '<178>', '<179>', '<180>', '<181>', '<182>', '<183>', '<184>', '<185>', '<186>', '<187>', '<188>', '<189>', '<190>', '<191>', '<192>', '<193>', '<194>', '<195>', '<196>', '<197>', '<198>', '<199>', '<200>', '<201>', '<202>', '<203>', '<204>', '<205>', '<206>', '<207>', '<208>', '<209>', '<210>', '<211>', '<212>', '<213>', '<214>', '<215>', '<216>', '<217>', '<218>', '<219>', '<220>', '<221>', '<222>', '<223>', '<224>', '<225>', '<226>', '<227>', '<228>', '<229>', '<230>', '<231>', '<232>', '<233>', '<234>', '<235>', '<236>', '<237>', '<238>', '<239>', '<240>', '<241>', '<242>', '<243>', '<244>', '<245>', '<246>', '<247>', '<248>', '<249>', '<250>', '<251>', '<252>', '<253>', '<254>', '<255>'];
 	var comparators = ['<', '<=', '==', '!=', '>', '>=', 'in', 'not in', 'is', 'is not', 'exception match', 'BAD'];
 	var have_argument = 90;
-	
-	var isInt = function(x) {
-		return typeof x === 'number' && x % 1 === 0;
+
+	var isInt = function(jsValue) {
+		return typeof jsValue === 'number' && jsValue % 1 === 0;
 	};
 	
 	var truthy = function(x) {
-		if (typeof x === 'number') return x != 0;
-		if (typeof x === 'boolean') return x;
-		// TODO: other types
+		if (x.__class__ === 'None') return false;
+		if (x.__class__ === 'int') return x.value !== 0;
+		if (x.__class__ === 'float') return x.value !== 0;
+		if (x.__class__ === 'unicode') return x.value !== '';
+		if (x.__class__ === 'list') return x.value.length >= 0;
+		if (x.__class__ === 'dict') return x.keys().length >= 0;
 		return false;
 	};
-	
-	var iter = function(x) {
-		//TODO: dict iter
-		return [0, x];
+
+	var iter = function(a) {
+		if (a.__class__ === 'list')
+			return [0, a.value];
+		if (a.__class__ === 'dict')
+			return [0, a.keys()];
+		throw 'PyException: can not iter over ' + a.__class__;
+	};
+
+	var str = function(x) {
+		if (x.__str__ !== undefined) return x.__str__();
+		return '<object of type ' + x.__class__ + ' (' + x + ')>';
 	};
 	
 	var VM = function(binary){
 		var fun = binary;
 		var code = binary.co_code;
+		var builtins = {};
 
 		var pos = 0;
 
 		var stack = [];
-		var env = {};
-		var global_env = env;
+		var env = builtins;
+		var global_env = builtins;
 		var blocks = [];
 		var calls = [];
+		
 		var stdout = function(item) { console.log('PRINT', item); };
 		
 		this.setPrinter = function(new_stdout) {
 			stdout = new_stdout;
+		};
+
+		this.addBuiltin = function(name, value) {
+			builtins[name] = value;
 		};
 
 		this.step = function() {
@@ -463,7 +481,7 @@ angular.module('contenteditable', []).directive('contenteditable', function() {
 			var argument = null;
 			pos += 1;
 			if (instruction >= have_argument) {
-				argument = code.charCodeAt(pos + 1) * 65536 + code.charCodeAt(pos);
+				argument = code.charCodeAt(pos + 1) * 256 + code.charCodeAt(pos);
 				pos += 2;
 			}
 			var name = opnames[instruction];
@@ -479,37 +497,38 @@ angular.module('contenteditable', []).directive('contenteditable', function() {
 
 		var operations = {};
 		
-		operations['STOP_CODE'] = function() {
+		operations.STOP_CODE = function() {
 			pos = -1;
 		};
 
-		operations['POP_TOP'] = function() {
+		operations.POP_TOP = function() {
 			stack.pop();
 		};
 
-		operations['LOAD_CONST'] = function(arg) {
-			stack.push(fun.co_consts[arg]);
+		operations.LOAD_CONST = function(arg) {
+			var value = exports.nativeToInternal(fun.co_consts[arg]);
+			stack.push(value);
 		};
 
-		operations['PRINT_ITEM'] = function() {
-			stdout(stack.pop());
+		operations.PRINT_ITEM = function() {
+			var value = stack.pop();
+			stdout(str(value));
 		};
 
-		operations['PRINT_NEWLINE'] = function() {
+		operations.PRINT_NEWLINE = function() {
 			stdout('\n');
 		};
 		
-		operations['SETUP_LOOP'] = function(arg) {
+		operations.SETUP_LOOP = function(arg) {
 			blocks.push([pos, pos + arg]);
 		};
 
-		operations['GET_ITER'] = function() {
-			// TODO: check type
+		operations.GET_ITER = function() {
 			var a = stack.pop();
 			stack.push(iter(a));
 		};
 
-		operations['FOR_ITER'] = function(arg) {
+		operations.FOR_ITER = function(arg) {
 			var iter = stack.pop();
 			var index = iter[0];
 			var iterable = iter[1];
@@ -522,20 +541,22 @@ angular.module('contenteditable', []).directive('contenteditable', function() {
 			}
 		};
 
-		operations['POP_BLOCK'] = function(arg) {
+		operations.POP_BLOCK = function(arg) {
 			blocks.pop();
 		};
 		
-		operations['MAKE_FUNCTION'] = function(arg) {
+		operations.MAKE_FUNCTION = function(arg) {
 			var fun = stack.pop();
 			var default_args = [];
 			for (var i = 0; i < arg; i++) {
 				default_args.push(stack.pop());
 			}
-			stack.push([fun, default_args]);
+			if (Object.prototype.toString.call(fun) !== '[object Object]')
+				throw 'Can not create function with wrong internals. ';
+			stack.push(new exports.PyFunction(fun, default_args));
 		};
 
-		operations['CALL_FUNCTION'] = function(arg) {
+		operations.CALL_FUNCTION = function(arg) {
 			var args_count = arg % 65536;
 			var kwargs_count = Math.floor(arg / 65536);
 			var args = [];
@@ -545,26 +566,33 @@ angular.module('contenteditable', []).directive('contenteditable', function() {
 				var key = stack.pop();
 				kwargs[key] = value;
 			}
-			for (var i = 0; i < args_count; i++) {
-				var value = stack.pop();
-				args.push(value);
+			for (i = 0; i < args_count; i++) {
+				var val = stack.pop();
+				args.push(val);
 			}
-			var fun_data = stack.pop();
-			var f = fun_data[0];
-			var default_args = fun_data[1];
-			calls.push([fun, pos, env, blocks]);
-			fun = f;
-			pos = 0;
-			env = kwargs;
-			blocks = [];
-			for (var i = 0; i < fun.co_varnames.length; i++) {
-				if (env[fun.co_varnames[i]] !== undefined) continue;
-				env[fun.co_varnames[i]] = i < args.length ? args[args.length - i - 1] : default_args[default_args.length - i - 1];
+			var f = stack.pop();
+			if (f.__class__ === 'function') {
+				calls.push([fun, pos, env, blocks]);
+				fun = f.value;
+				pos = 0;
+				env = kwargs;
+				blocks = [];
+				for (i = 0; i < fun.co_varnames.length; i++) {
+					if (env[fun.co_varnames[i]] !== undefined) continue;
+					env[fun.co_varnames[i]] = i < args.length ? args[args.length - i - 1] : f.default_kwargs[f.default_kwargs.length - i - 1];
+				}
+				return;
 			}
+			if (f.__class__ === 'builtin-function') {
+				stack.push(f.apply(args, kwargs));
+				return;
+			}
+			// TODO: raise PyException
+			throw 'PyException: type "' + f.__class__ + '" is not callable. ';
 		};
 
-		operations['RETURN_VALUE'] = function() {
-			if (calls.length == 0) {
+		operations.RETURN_VALUE = function() {
+			if (calls.length === 0) {
 				pos = -1;
 				return;
 			}
@@ -575,275 +603,541 @@ angular.module('contenteditable', []).directive('contenteditable', function() {
 			blocks = last_call[3];
 		};
 
-		operations['LOAD_GLOBAL'] = function(arg) {
+		operations.LOAD_GLOBAL = function(arg) {
 			stack.push(global_env[fun.co_names[arg]]);
 		};
 
-		operations['LOAD_FAST'] = function(arg) {
+		operations.LOAD_FAST = function(arg) {
 			stack.push(env[fun.co_varnames[arg]]);
 		};
 
-		operations['STORE_NAME'] = function(arg) {
+		operations.STORE_NAME = function(arg) {
 			var name = fun.co_names[arg];
 			env[name] = stack.pop();
 		};
 
-		operations['STORE_MAP'] = function(arg) {
+		operations.STORE_MAP = function(arg) {
 			var key = stack.pop();
 			var value = stack.pop();
 			var dict = stack.pop();
-			dict[key] = value;
+			if (dict.__class__ !== 'dict') throw 'PyException: Can not store key in ' + dict.__class__;
+			dict.set(key, value);
 			stack.push(dict);
 		};
 		
-		operations['STORE_SUBSCR'] = function(arg) {
+		operations.STORE_SUBSCR = function(arg) {
 			var key = stack.pop();
 			var obj = stack.pop();
 			var value = stack.pop();
-			// TODO: other types!
-			obj[key] = value;
-			stack.push(obj);
+			if (obj.__class__ !== 'dict') throw 'PyException: Can not store key in ' + obj.__class__;
+			obj.set(key, value);
+//			stack.push(obj);
 		};
 
-		operations['LOAD_NAME'] = function(arg) {
+		operations.LOAD_NAME = function(arg) {
 			var name = fun.co_names[arg];
 			stack.push(env[name]);
 		};
 
-		operations['LOAD_ATTR'] = function(arg) {
+		operations.LOAD_ATTR = function(arg) {
 			var name = fun.co_names[arg];
 			stack.push(stack.pop()[env[name]]);
 		};
 
 		// jumps
 
-		operations['POP_JUMP_IF_TRUE'] = function(arg) {
+		operations.POP_JUMP_IF_TRUE = function(arg) {
 			var a = stack.pop();
 			if (truthy(a)) pos = arg;
 		};
 		
-		operations['POP_JUMP_IF_FALSE'] = function(arg) {
+		operations.POP_JUMP_IF_FALSE = function(arg) {
 			var a = stack.pop();
 			if (!truthy(a)) pos = arg;
 		};
 		
-		operations['JUMP_FORWARD'] = function(arg) {
+		operations.JUMP_FORWARD = function(arg) {
 			pos += arg;
 		};
 		
-		operations['JUMP_ABSOLUTE'] = function(arg) {
+		operations.JUMP_ABSOLUTE = function(arg) {
 			pos = arg;
 		};
 		
 		// bulders 
 		
-		operations['BUILD_LIST'] = function(arg) {
+		operations.BUILD_LIST = function(arg) {
 			var a = [];
 			for (var i = 0; i < arg; i++) {
 				a[arg - i - 1] = stack.pop();
 			}
-			stack.push(a);
+			stack.push(new exports.PyList(a));
 		};
 		
-		operations['BUILD_MAP'] = function(arg) {
-			stack.push({});
+		operations.BUILD_MAP = function(arg) {
+			stack.push(new exports.PyDict({}));
 		};
 		
 		// UNARY
 
-		operations['UNARY_POSITIVE'] = function() {
-			// TODO: check type
+		operations.UNARY_POSITIVE = function() {
 			var a = stack.pop();
-			stack.push(+a);
+			stack.push(a);
 		};
 		
-		operations['UNARY_NEGATIVE'] = function() {
-			// TODO: check type
+		operations.UNARY_NEGATIVE = function() {
 			var a = stack.pop();
-			stack.push(-a);
+			if (a.__class__ === 'int') {
+				stack.push(new exports.PyInt(-a.value));
+				return;
+			}
+			if (a.__class__ === 'float') {
+				stack.push(new exports.PyFloat(-a.value));
+				return;
+			}
+			throw 'PyException: can not unary minus with ' + a.__class__;
 		};
 		
-		operations['UNARY_CONVERT'] = function() {
-			// TODO: check type
+		operations.UNARY_CONVERT = function() {
 			var a = stack.pop();
-			stack.push('' + a);
+			stack.push(new exports.PyUnicode(str(a)));
 		};
-		
-		operations['UNARY_INVERT'] = function() {
-			// TODO: check type
+
+		operations.UNARY_INVERT = function() {
 			var a = stack.pop();
-			stack.push(~a);
+			stack.push(new exports.PyBool(!truthy(a)));
 		};
 		
 		// compare
 
-		operations['COMPARE_OP'] = function(arg) {
+		operations.COMPARE_OP = function(arg) {
 			// TODO: check types
-			// var comparators = ['<', '<=', '==', '!=', '>', '>=', 'in', 'not in', 'is', 'is not', 'exception match', 'BAD'];
-			var a1 = stack.pop();
-			var a2 = stack.pop();
+			// var comparators = ['<', '<=', '==', '!=', '>', '>=', 'in', 'not in', 'is', 'is not', 'exception match', 'BAD;
+			var a1 = stack.pop().value;
+			var a2 = stack.pop().value;
 			if (arg === 0) {
-				stack.push(a2 < a1);
+				stack.push(new exports.PyBool(a2 < a1));
 				return;
 			}
 			if (arg === 1) {
-				stack.push(a2 <= a1);
+				stack.push(new exports.PyBool(a2 <= a1));
 				return;
 			}
 			if (arg === 2) {
-				stack.push(a2 == a1);
+				stack.push(new exports.PyBool(a2 === a1));
 				return;
 			}
 			if (arg === 3) {
-				stack.push(a2 != a1);
+				stack.push(new exports.PyBool(a2 !== a1));
 				return;
 			}
 			if (arg === 4) {
-				stack.push(a2 > a1);
+				stack.push(new exports.PyBool(a2 > a1));
 				return;
 			}
 			if (arg === 5) {
-				stack.push(a2 >= a1);
+				stack.push(new exports.PyBool(a2 >= a1));
 				return;
 			}
 			if (arg === 6) {
 				// TODO!
-				stack.push(a2 in a1);
+				stack.push(new exports.PyBool(a2 in a1));
 				return;
 			}
-			if (arg === 6) {
-				// TODO!
-				stack.push(!a2 in a1);
+			if (arg === 7) {
+				// TODO
+				stack.push(new exports.PyBool(!(a2 in a1)));
 				return;
 			}
 			log.warning('Unknown comparator: ' + arg);
-			stack.push(false);
+			stack.push(new exports.PyBool(false));
 		};
 
 		// BINARY
 
-		operations['BINARY_POWER'] = function() {
+		operations.BINARY_POWER = function() {
 			// TODO: check types
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(Math.pow(a2, a1));
+			if (a1.isNumber && a2.isNumber) {
+				if (a1.__class__ === 'float' || a2.__class__ === 'float') {
+					stack.push(new exports.PyFloat(Math.pow(a1.value, a2.value)));
+				} else {
+					stack.push(new exports.PyInt(Math.pow(a1.value, a2.value)));
+				}
+				return;
+			}
+			throw 'PyException: can not power ' + a2.__class__ + ' and ' + a1.__class__;
 		};
 
-		operations['BINARY_MULTIPLY'] = function() {
-			// TODO: check types
-			// TODO: implement for strings, lists, etc.
+		operations.BINARY_MULTIPLY = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2 * a1);
+			if (a1.isNumber && a2.isNumber) {
+				if (a1.__class__ === 'float' || a2.__class__ === 'float') {
+					stack.push(new exports.PyFloat(a1.value * a2.value));
+				} else {
+					stack.push(new exports.PyInt(a1.value * a2.value));
+				}
+				return;
+			}
+			if (a1.__class__ === 'int') {
+				var tmp = a2;
+				a2 = a1;
+				a1 = tmp;
+			}
+			var ret, i;
+			if (a2.__class__ === 'int') {
+				if (a1.__class__ === 'unicode') {
+					ret = '';
+					for (i = 0; i < a2.value; i++) {
+						ret += a1.value;
+					}
+					stack.push(new exports.PyUnicode(ret));
+					return;
+				}
+				if (a1.__class__ === 'list') {
+					ret = [];
+					for (i = 0; i < a2.value; i++) {
+						ret += ret.concat(a1.value);
+					}
+					stack.push(new exports.PyList(ret));
+					return;
+				}
+			}
+			throw 'PyException: can not multiply ' + a1.__class__ + ' and ' + a2.__class__;
 		};
 
-		operations['BINARY_DIVIDE'] = function() {
-			// TODO: check types
+		operations.BINARY_DIVIDE = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			var r = a2 / a1;
-			if (isInt(a1) && isInt(a2)) r = Math.floor(r); 
-			stack.push(r);
+			if (a1.isNumber && a2.isNumber) {
+				if (a1.__class__ === 'float' || a2.__class__ === 'float') {
+					stack.push(new exports.PyFloat(a2.value / a1.value));
+				} else {
+					stack.push(new exports.PyInt(Math.floor(a2.value / a1.value)));
+				}
+				return;
+			}
+			throw 'PyException: can not divide ' + a2.__class__ + ' and ' + a1.__class__;
 		};
 
-		operations['BINARY_FLOOR_DIVIDE'] = function() {
+		operations.BINARY_FLOOR_DIVIDE = function() {
 			// TODO: check types
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(Math.floor(a2 / a1));
+			if (a1.isNumber && a2.isNumber) {
+				stack.push(new exports.PyInt(Math.floor(a2.value / a1.value)));
+				return;
+			}
+			throw 'PyException: can not divide ' + a2.__class__ + ' and ' + a1.__class__;
 		};
 
-		operations['BINARY_TRUE_DIVIDE'] = function() {
-			// TODO: check types
+		operations.BINARY_TRUE_DIVIDE = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2 / a1);
+			if (a1.isNumber && a2.isNumber) {
+				stack.push(new exports.PyFloat(a2.value / a1.value));
+				return;
+			}
+			throw 'PyException: can not divide ' + a2.__class__ + ' and ' + a1.__class__;
 		};
 
-		operations['BINARY_MODULO'] = function() {
-			// TODO: check types
+		operations.BINARY_MODULO = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2 % a1);
+			if (a1.isNumber && a2.isNumber) {
+				stack.push(new exports.PyFloat(a2.value % a1.value));
+				return;
+			}
+			throw 'PyException: can not modulo ' + a2.__class__ + ' and ' + a1.__class__;
 		};
 
-		operations['BINARY_ADD'] = function() {
-			// TODO: check types
+		operations.BINARY_ADD = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2 + a1);
+			if (a1.isNumber && a2.isNumber) {
+				if (a1.__class__ === 'float' || a2.__class__ === 'float') {
+					stack.push(new exports.PyFloat(a1.value - a2.value));
+				} else {
+					stack.push(new exports.PyInt(a1.value - a2.value));
+				}
+				return;
+			}
+			if (a1.__class__ === 'list' && a2.__class__ === 'list') {
+				stack.push(new exports.PyList(a2.value.concat(a1.value)));
+				return;
+			}
+			if (a2.__class__ === 'unicode') {
+				stack.push(new exports.PyUnicode(a2.value + str(a1)));
+				return;
+			}
+			throw 'PyException: can not add ' + a2.__class__ + ' and ' + a1.__class__;
 		};
 
-		operations['BINARY_SUBTRACT'] = function() {
-			// TODO: check types
+		operations.BINARY_SUBTRACT = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2 - a1);
+			if (a1.isNumber && a2.isNumber) {
+				if (a1.__class__ === 'float' || a2.__class__ === 'float') {
+					stack.push(new exports.PyFloat(a2.value - a1.value));
+				} else {
+					stack.push(new exports.PyInt(a2.value - a1.value));
+				}
+				return;
+			}
+			throw 'PyException: can not substract ' + a1.__class__ + ' from ' + a2.__class__;
 		};
 
-		operations['BINARY_SUBSCR'] = function() {
-			// TODO: check types
+		operations.BINARY_SUBSCR = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2[a1]);
+			if (a2.__class__ === 'list') {
+				if (a1.__class__ === 'int') {
+					stack.push(a2.value[a1.value]);
+					return;
+				}
+				throw 'PyException: list index must be int. ';
+			}
+			if (a2.__class__ === 'dict') {
+				if (a1.immutable) {
+					var v = a2.get(a1);
+					if (v === null) {
+						// TODO: throw IndexError
+						v = new exports.PyNone();
+					}
+					stack.push(v);
+					return;
+				}
+				throw 'PyException: dict index must be immutable. ';
+			}
+			throw 'PyException: only lists and dicts are indexable, not ' + a1.__class__;
 		};
 
-		operations['BINARY_LSHIFT'] = function() {
-			// TODO: check types
+		operations.BINARY_LSHIFT = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2 << a1);
+			if (a1.__class__ === 'int' && a2.__class__ === 'int') {
+				stack.push(new exports.PyInt(a2.value << a1.value));
+				return;
+			}
+			throw 'PyException: can not lshift ' + a2.__class__ + ' and ' + a1.__class__;
 		};
 
-		operations['BINARY_RSHIFT'] = function() {
-			// TODO: check types
+		operations.BINARY_RSHIFT = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2 >> a1);
+			if (a1.__class__ === 'int' && a2.__class__ === 'int') {
+				stack.push(new exports.PyInt(a2.value << a1.value));
+				return;
+			}
+			throw 'PyException: can not rshift ' + a2.__class__ + ' and ' + a1.__class__;
 		};
 
-		operations['BINARY_AND'] = function() {
-			// TODO: check types
+		operations.BINARY_AND = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2 && a1);
+			stack.push(new exports.PyBool(truthy(a2) && truthy(a1)));
 		};
 
-		operations['BINARY_OR'] = function() {
-			// TODO: check types
+		operations.BINARY_OR = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2 || a1);
+			stack.push(new exports.PyBool(truthy(a2) || truthy(a1)));
 		};
 
-		operations['BINARY_OR'] = function() {
-			// TODO: check types
+		operations.BINARY_XOR = function() {
 			var a1 = stack.pop();
 			var a2 = stack.pop();
-			stack.push(a2 ? !a1 : a1);
+			stack.push(new exports.PyBool(truthy(a2) ? !truthy(a1) : truthy(a1)));
 		};
 		
 		// inplace
 		
-		operations['INPLACE_POWER'] = operations['BINARY_POWER'];
-		operations['INPLACE_MULTIPLY'] = operations['BINARY_MULTIPLY'];
-		operations['INPLACE_DIVIDE'] = operations['BINARY_DIVIDE'];
-		operations['INPLACE_FLOOR_DIVIDE'] = operations['BINARY_FLOOR_DIVIDE'];
-		operations['INPLACE_TRUE_DIVIDE'] = operations['BINARY_TRUE_DIVIDE'];
-		operations['INPLACE_MODULO'] = operations['BINARY_MODULO'];
-		operations['INPLACE_ADD'] = operations['BINARY_ADD'];
-		operations['INPLACE_SUBTRACT'] = operations['BINARY_SUBTRACT'];
-		operations['INPLACE_LSHIFT'] = operations['BINARY_LSHIFT'];
-		operations['INPLACE_RSHIFT'] = operations['BINARY_RSHIFT'];
-		operations['INPLACE_AND'] = operations['BINARY_AND'];
-		operations['INPLACE_XOR'] = operations['BINARY_XOR'];
-		operations['INPLACE_OR'] = operations['BINARY_OR'];
+		//TODO:
+		operations.INPLACE_POWER = operations.BINARY_POWER;
+		operations.INPLACE_MULTIPLY = operations.BINARY_MULTIPLY;
+		operations.INPLACE_DIVIDE = operations.BINARY_DIVIDE;
+		operations.INPLACE_FLOOR_DIVIDE = operations.BINARY_FLOOR_DIVIDE;
+		operations.INPLACE_TRUE_DIVIDE = operations.BINARY_TRUE_DIVIDE;
+		operations.INPLACE_MODULO = operations.BINARY_MODULO;
+		operations.INPLACE_ADD = operations.BINARY_ADD;
+		operations.INPLACE_SUBTRACT = operations.BINARY_SUBTRACT;
+		operations.INPLACE_LSHIFT = operations.BINARY_LSHIFT;
+		operations.INPLACE_RSHIFT = operations.BINARY_RSHIFT;
+		operations.INPLACE_AND = operations.BINARY_AND;
+		operations.INPLACE_XOR = operations.BINARY_XOR;
+		operations.INPLACE_OR = operations.BINARY_OR;
 		
 
 	};
 	
 	exports.VM = VM;
-})(window);
+})(window.PythonVM);
+
+
+window.PythonVM = window.PythonVM || {};
+(function(exports) {
+	
+	var PyClass = function() {
+		this.__class__ = 'type';
+	};
+	exports.PyClass = PyClass;
+	
+	var PyNone = function() {
+		var self = this;
+		this.__class__ = 'None';
+		this.__str__ = function() { return 'None'; };
+		this.immutable = true;
+		this.eq = function(o) { return o.__class__ === self.__class; };
+	};
+	exports.PyNone = PyNone;
+	
+	var PyBool = function(value) {
+		var self = this;
+		this.__class__ = 'bool';
+		this.value = value;
+		this.__str__ = function() { return value ? 'True' : 'False'; };
+		this.immutable = true;
+		this.eq = function(o) { return o.__class__ === self.__class && o.value === self.value; };
+	};
+	exports.PyBool = PyBool;
+	
+	var PyInt = function(value) {
+		var self = this;
+		this.__class__ = 'int';
+		this.value = value;
+		this.isNumber = true;
+		this.__str__ = function() { return value; };
+		this.immutable = true;
+		this.eq = function(o) { return o.__class__ === self.__class && o.value === self.value; };
+	};
+	exports.PyInt = PyInt;
+	
+	var PyFloat = function(value) {
+		var self = this;
+		this.__class__ = 'float';
+		this.value = value;
+		this.isNumber = true;
+		this.__str__ = function() { return value; };
+		this.immutable = true;
+		this.eq = function(o) { return o.__class__ === self.__class && o.value === self.value; };
+	};
+	exports.PyFloat = PyFloat;
+
+	var PyUnicode = function(value) {
+		var self = this;
+		this.__class__ = 'unicode';
+		this.value = value;
+		this.__str__ = function() { return value; };
+		this.immutable = true;
+		this.eq = function(o) { return o.__class__ === self.__class__ && o.value === self.value; };
+	};
+	exports.PyUnicode = PyUnicode;
+
+	var PyList = function(value) {
+		var self = this;
+		this.__class__ = 'list';
+		this.value = value;
+		this.__str__ = function() { return value; };
+		//TODO: eq
+		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+	};
+	exports.PyList = PyList;
+
+	var PyDict = function() {
+		var self = this;
+		this.__class__ = 'dict';
+		this.value = [];
+		this.keys = function() {
+			var ret = [];
+			for (var i = 0; i < self.value.length; i++) {
+				ret.push(this.value[i][0]);
+			}
+			return ret;
+		};
+		this.get = function(key) {
+			var ret = [];
+			for (var i = 0; i < self.value.length; i++) {
+				if (this.value[i][0].eq(key)) return this.value[i][1];
+			}
+			return null;
+		};
+		this.set = function(key, value) {
+			var ret = [];
+			for (var i = 0; i < self.value.length; i++) {
+				if (this.value[i][0].eq(key)){
+					this.value[i][1] = value;
+					return;
+				}
+			}
+			this.value.push([key, value]);
+		};
+		this.__str__ = function() { return 'dict(' + self.value + ')'; };
+		//TODO: eq
+		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+	};
+	exports.PyDict = PyDict;
+
+	var PyFunction = function(value, default_kwargs) {
+		var self = this;
+		this.__class__ = 'function';
+		this.value = value;
+		this.default_kwargs = default_kwargs;
+		this.__str__ = function() { return '<function>'; };
+		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+	};
+	exports.PyFunction = PyFunction;
+	
+	var PyBuiltinFunction = function(value, wrapper) {
+		// wrapper(args, kwargs) should return params for value
+		var self = this;
+		this.__class__ = 'builtin-function';
+		this.value = value;
+
+		this.__str__ = function() { return '<builtin-function>'; };
+		
+		this.apply = function(args, kwargs) {
+			var params;
+			if (wrapper === undefined) {
+				for (var x in kwargs) {
+					if (kwargs.hasOwnProperty(x)) {
+						// TODO: throw PyException
+						throw 'PyException: builtin-function does not accept kwarg "' + x + '""';
+					}
+				}
+				args.reverse();
+				params = args;
+			} else {
+				params = wrapper(args, kwargs);
+			}
+			return value.apply(null, params);
+		};
+		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+	};	
+	exports.PyBuiltinFunction = PyBuiltinFunction;
+
+	var nativeToInternal = function(value) {
+		if (typeof value === 'number' && value % 1 === 0) {
+			return new PyInt(value);
+		}
+		if (typeof value === 'number' && value % 1 !== 0) {
+			return new PyFloat(value);
+		}
+		if (typeof value === 'string') {
+			return new PyUnicode(value);
+		}
+		if (Object.prototype.toString.call(value) === '[object Array]') {
+			return new PyList(value);
+		}
+		if (Object.prototype.toString.call(value) === '[object Object]') {
+			return value;
+		}
+		throw 'Unknown native: "' + typeof value + '"';
+	};
+	exports.nativeToInternal = nativeToInternal;
+
+})(window.PythonVM);
 
 
 var module = angular.module('league');
@@ -854,13 +1148,24 @@ module.controller('OIXGameBoardController', function($scope) {
 	
 	var OIXCode = function(binary, board) {
 		var self = this;
+		var stopped = true;
 		this.board = board;
-		this.vm = new window.VM(binary);
 		this.output = '';
-		this.vm.setPrinter(function(item) { self.output += item; });
 		this.step = function() {
 			return self.vm.step();
 		};
+
+		var move = function(x, y) {
+			if (x.__class__ !== 'int' || y.__class__ !== 'int') {
+				throw 'Function "move" arguments must be int. ';
+			}
+			self.board.set(x.value, y.value, 1);
+		};
+
+		this.vm = new window.PythonVM.VM(binary);
+		this.vm.setPrinter(function(item) { self.output += item; });
+		this.vm.addBuiltin('id', new window.PythonVM.PyInt(157));
+		this.vm.addBuiltin('move', new window.PythonVM.PyBuiltinFunction(move));
 	};
 	
 	var EMPTY = 0;
@@ -895,6 +1200,7 @@ module.controller('OIXGameBoardController', function($scope) {
 	var variant = new OIXVariant('small', 3, 3, 3);
 	var board = new Board(variant.rows, variant.cols);
 	var code1 = null;
+	var breakRun = false;
 	
 	$scope.variant = variant;
 	$scope.board = board;
@@ -909,6 +1215,7 @@ module.controller('OIXGameBoardController', function($scope) {
 	$scope.step = function() {
 		if (code1 === null) {
 			code1 = new OIXCode(program.data.binary, board);
+			code1.vm.addBuiltin('debugger', new window.PythonVM.PyBuiltinFunction(pdb));
 			$scope.output = code1.output;
 			$scope.is_running = true;
 			return;
@@ -922,10 +1229,16 @@ module.controller('OIXGameBoardController', function($scope) {
 		$scope.output = code1.output;		
 	};
 
+	var pdb = function() {
+		breakRun = true;
+		return new window.PythonVM.PyInt(0);
+	};
+
 	$scope.run = function() {
+		breakRun = false;
 		do {
 			$scope.step();
-		} while ($scope.is_running);
+		} while ($scope.is_running && !breakRun);
 	};
 
 });
