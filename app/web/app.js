@@ -1,5 +1,5 @@
 
-angular.module('app', ['league', 'users', 'contenteditable', 'ngRoute','myapp-main','templates' ])
+angular.module('app', ['league', 'users', 'contenteditable', 'ngRoute','myapp-main','templates', 'ui.bootstrap'])
   .config(function ($routeProvider) {
     $routeProvider
       .otherwise({
@@ -21,7 +21,7 @@ var cached = function(f) {
 	};
 };
 
-angular.module('league', ['ngRoute', 'db', 'ngResource'])
+angular.module('league', ['ngRoute', 'db', 'ngResource', 'ui.ace'])
 .config(function($routeProvider) {
 
 	$routeProvider.when('/game/:id', {
@@ -131,6 +131,8 @@ angular.module('league', ['ngRoute', 'db', 'ngResource'])
 
 }).controller('ProgramEditForm', function($scope, $routeParams, $rootScope, $location, db, $resource) {
 
+	$scope.edit_disabled = false;
+
 	$scope.update = function() {
 		var Resource = $resource('/league/program/:id', {
 			'id' : '@id'
@@ -140,19 +142,6 @@ angular.module('league', ['ngRoute', 'db', 'ngResource'])
 			$rootScope.message = 'Saved!';
 		}, function (error) {
 			$rootScope.message = 'Failed!'; 			
-		});
-
-	};
-
-	$scope.compile = function() {
-		var Resource = $resource('/league/program/:id/compile', {'id' : '@id'});
-		Resource.save({'id': $scope.program.id}, {'data': $scope.program.data.data}, 
-		function(data) {
-			$rootScope.message = 'Compiled! ';
-			$scope.program.data.binary = data.binary;
-		}, function (error) {
-			var data = error.data;
-			$rootScope.message = data[0] + ' ' + data[1].value; 			
 		});
 
 	};
@@ -222,6 +211,13 @@ angular.module('users', ['ngRoute', 'db', 'ngResource'])
 
 });
 
+angular.module('league').directive('editor', function() {
+	return {
+		restrict: 'AE',
+		templateUrl: 'directives/editor.html',
+		scpoe: {'model': '&'}
+	};
+}); 
 var module = angular.module('db', []);
 
 module.factory('db', function() {
@@ -431,6 +427,7 @@ window.PythonVM = window.PythonVM || {};
 	
 	var truthy = function(x) {
 		if (x.__class__ === 'None') return false;
+		if (x.__class__ === 'bool') return x.value;
 		if (x.__class__ === 'int') return x.value !== 0;
 		if (x.__class__ === 'float') return x.value !== 0;
 		if (x.__class__ === 'unicode') return x.value !== '';
@@ -451,11 +448,19 @@ window.PythonVM = window.PythonVM || {};
 		if (x.__str__ !== undefined) return x.__str__();
 		return '<object of type ' + x.__class__ + ' (' + x + ')>';
 	};
+	exports.str = str;
+	
+	var len = function(x) {
+		if (x.__len__ !== undefined) return new exports.PyInt(x.__len__());
+		throw 'PyException: can not call len with ' + x.__class__;
+	};
 	
 	var VM = function(binary){
+		var self = this;
 		var fun = binary;
 		var code = binary.co_code;
 		var builtins = {};
+		builtins.len = new exports.PyBuiltinFunction(len);
 
 		var pos = 0;
 
@@ -474,6 +479,8 @@ window.PythonVM = window.PythonVM || {};
 		this.addBuiltin = function(name, value) {
 			builtins[name] = value;
 		};
+		
+		this.is_running = true;
 
 		this.step = function() {
 			var code = fun.co_code;
@@ -488,11 +495,18 @@ window.PythonVM = window.PythonVM || {};
 			console.log('OPERATION', name, argument);
 			var handler = operations[name];
 			if (handler === undefined) {
+				self.is_running = false;
 				throw 'Unsupported instruction: ' + name + ' (' + instruction + ')';
 			}
-			handler(argument);
+			try {
+				handler(argument);				
+			} catch (e) {
+				pos = -1;
+				self.is_running = false;
+				throw e;
+			};
 			console.log('STACK: ', stack, '. ENV: ', env, '. BLOCK: ' + blocks, '. CALLS: ', calls);
-			return pos >= 0;
+			if (pos < 0) self.is_running = false;
 		};
 
 		var operations = {};
@@ -557,14 +571,15 @@ window.PythonVM = window.PythonVM || {};
 		};
 
 		operations.CALL_FUNCTION = function(arg) {
-			var args_count = arg % 65536;
-			var kwargs_count = Math.floor(arg / 65536);
+			var args_count = arg % 256;
+			var kwargs_count = Math.floor(arg / 256);
 			var args = [];
 			var kwargs = {};
 			for (var i = 0; i < kwargs_count; i++) {
 				var value = stack.pop();
 				var key = stack.pop();
-				kwargs[key] = value;
+				if (key.__class__ !== 'unicode') throw 'PyException: kwarg name must be string';
+				kwargs[key.value] = value;
 			}
 			for (i = 0; i < args_count; i++) {
 				var val = stack.pop();
@@ -629,8 +644,35 @@ window.PythonVM = window.PythonVM || {};
 			var key = stack.pop();
 			var obj = stack.pop();
 			var value = stack.pop();
-			if (obj.__class__ !== 'dict') throw 'PyException: Can not store key in ' + obj.__class__;
-			obj.set(key, value);
+			var ok = false;
+			if (obj.__class__ === 'list') {
+				if (key.__class__ !== 'int') throw 'PyException: List index must be int';
+				obj.value[key.value] = value;
+				ok = true;
+			}
+			if (obj.__class__ === 'dict') {
+				obj.set(key, value);
+				ok = true;
+			}
+			if (!ok) throw 'PyException: Can not store key in ' + obj.__class__;
+//			stack.push(obj);
+		};
+
+		operations.DELETE_SUBSCR = function(arg) {
+			var key = stack.pop();
+			var obj = stack.pop();
+			var ok = false;
+			if (obj.__class__ === 'list') {
+				if (key.__class__ !== 'int') throw 'PyException: List index must be int';
+				if (key.value >= obj.value.length) throw 'PyException: List index out of range';
+				obj.value.splice(key.value, 1);
+				ok = true;
+			}
+			if (obj.__class__ === 'dict') {
+				obj.del(key);
+				ok = true;
+			}
+			if (!ok) throw 'PyException: Can not store key in ' + obj.__class__;
 //			stack.push(obj);
 		};
 
@@ -641,7 +683,10 @@ window.PythonVM = window.PythonVM || {};
 
 		operations.LOAD_ATTR = function(arg) {
 			var name = fun.co_names[arg];
-			stack.push(stack.pop()[env[name]]);
+			var obj = stack.pop();
+			var attr = obj.getattr(name);
+			if (attr === null) throw 'PyException: no attr ' + name;
+			stack.push(attr);
 		};
 
 		// jumps
@@ -711,42 +756,91 @@ window.PythonVM = window.PythonVM || {};
 		// compare
 
 		operations.COMPARE_OP = function(arg) {
-			// TODO: check types
+			var i, ret;
 			// var comparators = ['<', '<=', '==', '!=', '>', '>=', 'in', 'not in', 'is', 'is not', 'exception match', 'BAD;
-			var a1 = stack.pop().value;
-			var a2 = stack.pop().value;
-			if (arg === 0) {
-				stack.push(new exports.PyBool(a2 < a1));
+			var a1 = stack.pop();
+			var a2 = stack.pop();
+
+			// in, not in
+			if (arg === 6 || arg === 7) {
+				ret = false;
+				var ok = false;
+				if (a1.__class__ === 'unicode') {
+					if (a2.__class__ !== 'unicode') throw 'PyException: \'in <string>\' requires string as left operand, not ' + a2.__class__;
+					ret = a1.value.indexOf(a2.value) >= 0;
+					ok = true;
+				}
+				if (a1.__class__ === 'list') {
+					for (i = 0; i < a1.value.length; i++) {
+						if (a1.value[i].eq(a2)) ret = true;
+					}
+					ok = true;
+				}
+				if (a1.__class__ === 'dict') {
+					var keys = a1.keys();
+					for (i = 0; i < keys.length; i++) {
+						if (keys[i].eq(a2)) ret = true;
+					}
+					ok = true;
+				}
+				if (!ok) throw 'PyException: Can not search in ' + a1.__class__;
+				if (arg === 7) ret = !ret;
+				stack.push(new exports.PyBool(ret));
 				return;
 			}
-			if (arg === 1) {
-				stack.push(new exports.PyBool(a2 <= a1));
+
+			// is, not is
+			if (arg === 8 || arg == 9) {
+				ret = false;
+				if (a1.__class__ === a2.__class__) {
+					if (a1.immutable && a1.value == a2.value) ret = true;
+					if (!a1.immutable && a1.value === a2.value) ret = true;
+				}
+				if (arg === 9) ret = !ret;
+				stack.push(new exports.PyBool(ret));
 				return;
 			}
+
+			// eq
 			if (arg === 2) {
-				stack.push(new exports.PyBool(a2 === a1));
+				stack.push(new exports.PyBool(a2.eq(a1)));
 				return;
 			}
+			// not eq
 			if (arg === 3) {
-				stack.push(new exports.PyBool(a2 !== a1));
+				stack.push(new exports.PyBool(!a2.eq(a1)));
 				return;
 			}
+
+			// compares
+			var v1 = a1;
+			var v2 = a2;
+			if ((a1.isNumber && a2.isNumber) ||
+				(a1.__class__ === 'None' && a2.__class__ === 'None') ||
+				(a1.__class__ === 'bool' && a2.__class__ === 'bool') ||
+				(a1.__class__ === 'unicode' && a2.__class__ === 'unicode') ||
+				(a1.__class__ === 'list' && a2.__class__ === 'list')) {
+				v1 = a1.value;
+				v2 = a2.value;
+			}
+			// <
+			if (arg === 0) {
+				stack.push(new exports.PyBool(v2 < v1));
+				return;
+			}
+			// <=
+			if (arg === 1) {
+				stack.push(new exports.PyBool(v2 < v1 || a2.eq(a1)));
+				return;
+			}
+			// >
 			if (arg === 4) {
-				stack.push(new exports.PyBool(a2 > a1));
+				stack.push(new exports.PyBool(v2 > v1));
 				return;
 			}
+			// >=
 			if (arg === 5) {
-				stack.push(new exports.PyBool(a2 >= a1));
-				return;
-			}
-			if (arg === 6) {
-				// TODO!
-				stack.push(new exports.PyBool(a2 in a1));
-				return;
-			}
-			if (arg === 7) {
-				// TODO
-				stack.push(new exports.PyBool(!(a2 in a1)));
+				stack.push(new exports.PyBool(v2 > v1 || a2.eq(a1)));
 				return;
 			}
 			log.warning('Unknown comparator: ' + arg);
@@ -858,9 +952,9 @@ window.PythonVM = window.PythonVM || {};
 			var a2 = stack.pop();
 			if (a1.isNumber && a2.isNumber) {
 				if (a1.__class__ === 'float' || a2.__class__ === 'float') {
-					stack.push(new exports.PyFloat(a1.value - a2.value));
+					stack.push(new exports.PyFloat(a1.value + a2.value));
 				} else {
-					stack.push(new exports.PyInt(a1.value - a2.value));
+					stack.push(new exports.PyInt(a1.value + a2.value));
 				}
 				return;
 			}
@@ -990,6 +1084,7 @@ window.PythonVM = window.PythonVM || {};
 		this.__str__ = function() { return 'None'; };
 		this.immutable = true;
 		this.eq = function(o) { return o.__class__ === self.__class; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyNone = PyNone;
 	
@@ -999,7 +1094,8 @@ window.PythonVM = window.PythonVM || {};
 		this.value = value;
 		this.__str__ = function() { return value ? 'True' : 'False'; };
 		this.immutable = true;
-		this.eq = function(o) { return o.__class__ === self.__class && o.value === self.value; };
+		this.eq = function(o) { return o.__class__ === self.__class__ && o.value === self.value; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyBool = PyBool;
 	
@@ -1010,7 +1106,8 @@ window.PythonVM = window.PythonVM || {};
 		this.isNumber = true;
 		this.__str__ = function() { return value; };
 		this.immutable = true;
-		this.eq = function(o) { return o.__class__ === self.__class && o.value === self.value; };
+		this.eq = function(o) { return o.__class__ === self.__class__ && o.value === self.value; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyInt = PyInt;
 	
@@ -1021,7 +1118,8 @@ window.PythonVM = window.PythonVM || {};
 		this.isNumber = true;
 		this.__str__ = function() { return value; };
 		this.immutable = true;
-		this.eq = function(o) { return o.__class__ === self.__class && o.value === self.value; };
+		this.eq = function(o) { return o.__class__ === self.__class__ && o.value === self.value; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyFloat = PyFloat;
 
@@ -1031,7 +1129,11 @@ window.PythonVM = window.PythonVM || {};
 		this.value = value;
 		this.__str__ = function() { return value; };
 		this.immutable = true;
+		this.__len__ = function() {
+			return this.value.length;
+		};
 		this.eq = function(o) { return o.__class__ === self.__class__ && o.value === self.value; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyUnicode = PyUnicode;
 
@@ -1039,9 +1141,29 @@ window.PythonVM = window.PythonVM || {};
 		var self = this;
 		this.__class__ = 'list';
 		this.value = value;
-		this.__str__ = function() { return value; };
-		//TODO: eq
-		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+		this.__str__ = function() {
+			var ret = '[';
+			for (var i = 0; i < self.value.length; i++) {
+				ret += exports.str(self.value[i]) + ', ';
+			}
+			ret += ']';
+			return ret; 
+		};
+		this.__len__ = function() {
+			return this.value.length; 
+		};
+		this.eq = function(o) { 
+			if (o.__class__ !== self.__class) return false;
+			if (self.value.length != o.value.length) return false;
+			for (var i = 0; i < self.value.length; i++) {
+				if (!v1.eq(v2)) return false;
+			}
+			return true;
+		};
+		this.getattr = function(attrName) { return self.__dict__[attrName] || null; };
+		this.__dict__ = {
+			'append': new PyBuiltinFunction(function(item) { self.value.push(item); })
+		};
 	};
 	exports.PyList = PyList;
 
@@ -1063,6 +1185,15 @@ window.PythonVM = window.PythonVM || {};
 			}
 			return null;
 		};
+		this.del = function(key) {
+			for (var i = 0; i < self.value.length; i++) {
+				if (this.value[i][0].eq(key)) {
+					this.value.splice(i, 0);
+					return;
+				}
+			}
+			throw 'PyException: no such index';
+		};
 		this.set = function(key, value) {
 			var ret = [];
 			for (var i = 0; i < self.value.length; i++) {
@@ -1073,9 +1204,29 @@ window.PythonVM = window.PythonVM || {};
 			}
 			this.value.push([key, value]);
 		};
-		this.__str__ = function() { return 'dict(' + self.value + ')'; };
-		//TODO: eq
-		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+		this.__str__ = function() {
+			var ret = '{';
+			for (var i = 0; i < self.value.length; i++) {
+				ret += exports.str(self.value[i][0]) + ': ' + exports.str(self.value[i][1]);
+			}
+			ret += '}';
+			return ret; 
+		};
+		this.__len__ = function() {
+			return this.value.length; 
+		};
+		this.eq = function(o) {
+			if (o.__class__ !== self.__class) return false;
+			if (self.value.length != o.value.length) return false;
+			for (var i = 0; i < self.value.length; i++) {
+				var v1 = self.value[1];
+				var v2 = o.get(self.value[0]);
+				if (v2 === null) return false;
+				if (!v1.eq(v2)) return false;
+			}
+			return true;
+		};
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyDict = PyDict;
 
@@ -1085,7 +1236,8 @@ window.PythonVM = window.PythonVM || {};
 		this.value = value;
 		this.default_kwargs = default_kwargs;
 		this.__str__ = function() { return '<function>'; };
-		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+		this.eq = function(o) { return o.__class__ === self.__class__ && o === self; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyFunction = PyFunction;
 	
@@ -1102,7 +1254,6 @@ window.PythonVM = window.PythonVM || {};
 			if (wrapper === undefined) {
 				for (var x in kwargs) {
 					if (kwargs.hasOwnProperty(x)) {
-						// TODO: throw PyException
 						throw 'PyException: builtin-function does not accept kwarg "' + x + '""';
 					}
 				}
@@ -1113,11 +1264,15 @@ window.PythonVM = window.PythonVM || {};
 			}
 			return value.apply(null, params);
 		};
-		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+		this.eq = function(o) { return o.__class__ === self.__class__ && o === self; };
+		this.getattr = function(o) { return null; };
 	};	
 	exports.PyBuiltinFunction = PyBuiltinFunction;
 
 	var nativeToInternal = function(value) {
+		if (value === null) {
+			return new PyNone();
+		}
 		if (typeof value === 'number' && value % 1 === 0) {
 			return new PyInt(value);
 		}
@@ -1128,9 +1283,14 @@ window.PythonVM = window.PythonVM || {};
 			return new PyUnicode(value);
 		}
 		if (Object.prototype.toString.call(value) === '[object Array]') {
-			return new PyList(value);
+			var val = [];
+			for (var i = 0; i < value.length; i++) {
+				val[i] = nativeToInternal(value[i]);
+			}
+			return new PyList(val);
 		}
 		if (Object.prototype.toString.call(value) === '[object Object]') {
+			// code object, not a dict!
 			return value;
 		}
 		throw 'Unknown native: "' + typeof value + '"';
@@ -1142,7 +1302,7 @@ window.PythonVM = window.PythonVM || {};
 
 var module = angular.module('league');
 
-module.controller('OIXGameBoardController', function($scope) {
+module.controller('OIXGameBoardController', function($scope, $resource, $timeout, $rootScope) {
 	
 	var program = $scope.program;
 	
@@ -1196,31 +1356,65 @@ module.controller('OIXGameBoardController', function($scope) {
 			this.rows[y][x] = v;
 		};
 	};
+	
+	var newBoard = function() {
+		return new Board(variant.rows, variant.cols);		
+	};
 
 	var variant = new OIXVariant('small', 3, 3, 3);
-	var board = new Board(variant.rows, variant.cols);
+	var board = newBoard();
 	var code1 = null;
+	var compiled_code_text = null;
 	var breakRun = false;
 	
 	$scope.variant = variant;
 	$scope.board = board;
 	$scope.is_running = false;
 
+	var compile = function(onSuccess, onError) {
+		$scope.compiling = true;
+		var Resource = $resource('/league/program/:id/compile', {'id' : '@id'});
+		Resource.save({'id': $scope.program.id}, {'data': $scope.program.data.data}, 
+		function(data) {
+			$scope.compiling = false;
+			$rootScope.message = 'Compiled! ';
+			$scope.program.data.binary = data.binary;
+			compiled_code_text = program.data.data;
+			onSuccess();
+		}, function (error) {
+			$scope.compiling = false;
+			var data = error.data;
+			$rootScope.message = data[0] + ' ' + data[1].value;
+			onError();		
+		});
+		// TODO: zero $scope.program.data.binary on data change
+	};
+
 	$scope.reset = function() {
 		$scope.output = '';
 		$scope.is_running = false;
 		code1 = null;
+		board = newBoard();
+		$scope.board = board;
+		breakRun = true;
 	};
 
-	$scope.step = function() {
-		if (code1 === null) {
-			code1 = new OIXCode(program.data.binary, board);
-			code1.vm.addBuiltin('debugger', new window.PythonVM.PyBuiltinFunction(pdb));
-			$scope.output = code1.output;
-			$scope.is_running = true;
+	var ensureCompiled = function(afterCompiled) {
+		if (compiled_code_text === program.data.data) {
+			afterCompiled();
 			return;
 		}
-		if (!code1.step()) {
+		compile(afterCompiled, function(){});
+	};
+
+	var _step = function() {
+		if (code1 === null) {
+			$scope.is_running = true;
+			code1 = new OIXCode(program.data.binary, board);
+			code1.vm.addBuiltin('debugger', new window.PythonVM.PyBuiltinFunction(pdb));
+		}
+		code1.step();
+		if (!code1.vm.is_running) {
 			$scope.is_running = false;
 			$scope.output = code1.output;		
 			code1 = null;
@@ -1229,16 +1423,27 @@ module.controller('OIXGameBoardController', function($scope) {
 		$scope.output = code1.output;		
 	};
 
+	$scope.step = function() { ensureCompiled(_step); };
+
 	var pdb = function() {
 		breakRun = true;
 		return new window.PythonVM.PyInt(0);
 	};
 
-	$scope.run = function() {
-		breakRun = false;
-		do {
-			$scope.step();
-		} while ($scope.is_running && !breakRun);
+	var _run = function() {
+		_step();
+		if ($scope.is_running && !breakRun) {
+			$timeout(_run, 0);
+		}
+	};
+
+	$scope.run = function() { 
+		if (breakRun) {
+			breakRun = false;
+			ensureCompiled(_run);
+		} else {
+			breakRun = true;			
+		}
 	};
 
 });

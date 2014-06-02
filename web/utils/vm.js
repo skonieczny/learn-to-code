@@ -12,6 +12,7 @@ window.PythonVM = window.PythonVM || {};
 	
 	var truthy = function(x) {
 		if (x.__class__ === 'None') return false;
+		if (x.__class__ === 'bool') return x.value;
 		if (x.__class__ === 'int') return x.value !== 0;
 		if (x.__class__ === 'float') return x.value !== 0;
 		if (x.__class__ === 'unicode') return x.value !== '';
@@ -32,11 +33,19 @@ window.PythonVM = window.PythonVM || {};
 		if (x.__str__ !== undefined) return x.__str__();
 		return '<object of type ' + x.__class__ + ' (' + x + ')>';
 	};
+	exports.str = str;
+	
+	var len = function(x) {
+		if (x.__len__ !== undefined) return new exports.PyInt(x.__len__());
+		throw 'PyException: can not call len with ' + x.__class__;
+	};
 	
 	var VM = function(binary){
+		var self = this;
 		var fun = binary;
 		var code = binary.co_code;
 		var builtins = {};
+		builtins.len = new exports.PyBuiltinFunction(len);
 
 		var pos = 0;
 
@@ -55,6 +64,8 @@ window.PythonVM = window.PythonVM || {};
 		this.addBuiltin = function(name, value) {
 			builtins[name] = value;
 		};
+		
+		this.is_running = true;
 
 		this.step = function() {
 			var code = fun.co_code;
@@ -69,11 +80,18 @@ window.PythonVM = window.PythonVM || {};
 			console.log('OPERATION', name, argument);
 			var handler = operations[name];
 			if (handler === undefined) {
+				self.is_running = false;
 				throw 'Unsupported instruction: ' + name + ' (' + instruction + ')';
 			}
-			handler(argument);
+			try {
+				handler(argument);				
+			} catch (e) {
+				pos = -1;
+				self.is_running = false;
+				throw e;
+			};
 			console.log('STACK: ', stack, '. ENV: ', env, '. BLOCK: ' + blocks, '. CALLS: ', calls);
-			return pos >= 0;
+			if (pos < 0) self.is_running = false;
 		};
 
 		var operations = {};
@@ -138,14 +156,15 @@ window.PythonVM = window.PythonVM || {};
 		};
 
 		operations.CALL_FUNCTION = function(arg) {
-			var args_count = arg % 65536;
-			var kwargs_count = Math.floor(arg / 65536);
+			var args_count = arg % 256;
+			var kwargs_count = Math.floor(arg / 256);
 			var args = [];
 			var kwargs = {};
 			for (var i = 0; i < kwargs_count; i++) {
 				var value = stack.pop();
 				var key = stack.pop();
-				kwargs[key] = value;
+				if (key.__class__ !== 'unicode') throw 'PyException: kwarg name must be string';
+				kwargs[key.value] = value;
 			}
 			for (i = 0; i < args_count; i++) {
 				var val = stack.pop();
@@ -210,8 +229,35 @@ window.PythonVM = window.PythonVM || {};
 			var key = stack.pop();
 			var obj = stack.pop();
 			var value = stack.pop();
-			if (obj.__class__ !== 'dict') throw 'PyException: Can not store key in ' + obj.__class__;
-			obj.set(key, value);
+			var ok = false;
+			if (obj.__class__ === 'list') {
+				if (key.__class__ !== 'int') throw 'PyException: List index must be int';
+				obj.value[key.value] = value;
+				ok = true;
+			}
+			if (obj.__class__ === 'dict') {
+				obj.set(key, value);
+				ok = true;
+			}
+			if (!ok) throw 'PyException: Can not store key in ' + obj.__class__;
+//			stack.push(obj);
+		};
+
+		operations.DELETE_SUBSCR = function(arg) {
+			var key = stack.pop();
+			var obj = stack.pop();
+			var ok = false;
+			if (obj.__class__ === 'list') {
+				if (key.__class__ !== 'int') throw 'PyException: List index must be int';
+				if (key.value >= obj.value.length) throw 'PyException: List index out of range';
+				obj.value.splice(key.value, 1);
+				ok = true;
+			}
+			if (obj.__class__ === 'dict') {
+				obj.del(key);
+				ok = true;
+			}
+			if (!ok) throw 'PyException: Can not store key in ' + obj.__class__;
 //			stack.push(obj);
 		};
 
@@ -222,7 +268,10 @@ window.PythonVM = window.PythonVM || {};
 
 		operations.LOAD_ATTR = function(arg) {
 			var name = fun.co_names[arg];
-			stack.push(stack.pop()[env[name]]);
+			var obj = stack.pop();
+			var attr = obj.getattr(name);
+			if (attr === null) throw 'PyException: no attr ' + name;
+			stack.push(attr);
 		};
 
 		// jumps
@@ -292,42 +341,91 @@ window.PythonVM = window.PythonVM || {};
 		// compare
 
 		operations.COMPARE_OP = function(arg) {
-			// TODO: check types
+			var i, ret;
 			// var comparators = ['<', '<=', '==', '!=', '>', '>=', 'in', 'not in', 'is', 'is not', 'exception match', 'BAD;
-			var a1 = stack.pop().value;
-			var a2 = stack.pop().value;
-			if (arg === 0) {
-				stack.push(new exports.PyBool(a2 < a1));
+			var a1 = stack.pop();
+			var a2 = stack.pop();
+
+			// in, not in
+			if (arg === 6 || arg === 7) {
+				ret = false;
+				var ok = false;
+				if (a1.__class__ === 'unicode') {
+					if (a2.__class__ !== 'unicode') throw 'PyException: \'in <string>\' requires string as left operand, not ' + a2.__class__;
+					ret = a1.value.indexOf(a2.value) >= 0;
+					ok = true;
+				}
+				if (a1.__class__ === 'list') {
+					for (i = 0; i < a1.value.length; i++) {
+						if (a1.value[i].eq(a2)) ret = true;
+					}
+					ok = true;
+				}
+				if (a1.__class__ === 'dict') {
+					var keys = a1.keys();
+					for (i = 0; i < keys.length; i++) {
+						if (keys[i].eq(a2)) ret = true;
+					}
+					ok = true;
+				}
+				if (!ok) throw 'PyException: Can not search in ' + a1.__class__;
+				if (arg === 7) ret = !ret;
+				stack.push(new exports.PyBool(ret));
 				return;
 			}
-			if (arg === 1) {
-				stack.push(new exports.PyBool(a2 <= a1));
+
+			// is, not is
+			if (arg === 8 || arg == 9) {
+				ret = false;
+				if (a1.__class__ === a2.__class__) {
+					if (a1.immutable && a1.value == a2.value) ret = true;
+					if (!a1.immutable && a1.value === a2.value) ret = true;
+				}
+				if (arg === 9) ret = !ret;
+				stack.push(new exports.PyBool(ret));
 				return;
 			}
+
+			// eq
 			if (arg === 2) {
-				stack.push(new exports.PyBool(a2 === a1));
+				stack.push(new exports.PyBool(a2.eq(a1)));
 				return;
 			}
+			// not eq
 			if (arg === 3) {
-				stack.push(new exports.PyBool(a2 !== a1));
+				stack.push(new exports.PyBool(!a2.eq(a1)));
 				return;
 			}
+
+			// compares
+			var v1 = a1;
+			var v2 = a2;
+			if ((a1.isNumber && a2.isNumber) ||
+				(a1.__class__ === 'None' && a2.__class__ === 'None') ||
+				(a1.__class__ === 'bool' && a2.__class__ === 'bool') ||
+				(a1.__class__ === 'unicode' && a2.__class__ === 'unicode') ||
+				(a1.__class__ === 'list' && a2.__class__ === 'list')) {
+				v1 = a1.value;
+				v2 = a2.value;
+			}
+			// <
+			if (arg === 0) {
+				stack.push(new exports.PyBool(v2 < v1));
+				return;
+			}
+			// <=
+			if (arg === 1) {
+				stack.push(new exports.PyBool(v2 < v1 || a2.eq(a1)));
+				return;
+			}
+			// >
 			if (arg === 4) {
-				stack.push(new exports.PyBool(a2 > a1));
+				stack.push(new exports.PyBool(v2 > v1));
 				return;
 			}
+			// >=
 			if (arg === 5) {
-				stack.push(new exports.PyBool(a2 >= a1));
-				return;
-			}
-			if (arg === 6) {
-				// TODO!
-				stack.push(new exports.PyBool(a2 in a1));
-				return;
-			}
-			if (arg === 7) {
-				// TODO
-				stack.push(new exports.PyBool(!(a2 in a1)));
+				stack.push(new exports.PyBool(v2 > v1 || a2.eq(a1)));
 				return;
 			}
 			log.warning('Unknown comparator: ' + arg);
@@ -439,9 +537,9 @@ window.PythonVM = window.PythonVM || {};
 			var a2 = stack.pop();
 			if (a1.isNumber && a2.isNumber) {
 				if (a1.__class__ === 'float' || a2.__class__ === 'float') {
-					stack.push(new exports.PyFloat(a1.value - a2.value));
+					stack.push(new exports.PyFloat(a1.value + a2.value));
 				} else {
-					stack.push(new exports.PyInt(a1.value - a2.value));
+					stack.push(new exports.PyInt(a1.value + a2.value));
 				}
 				return;
 			}

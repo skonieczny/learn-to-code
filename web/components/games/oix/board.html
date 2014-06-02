@@ -1,14 +1,22 @@
 <div class="oix" ng-controller="OIXGameBoardController">
-	OIX board
-	<button ng-click="step()">Step</button>
-	<button ng-click="run()">Run</button>
-	<button ng-click="reset()">Reset</button>
-	Playing against none.
-	Variant: {{ variant.type }}
+	<h4>Test</h4>
+	<div>
+		Playing against: random-moves
+	</div>
+	<div>
+		Variant: {{ variant.type }}
+	</div>
+	<div>
+		<button ng-click="step()" class="btn btn-primary">Step</button>
+		<button ng-click="run()" class="btn btn-primary">Run</button>
+		<button ng-click="reset()" class="btn btn-primary">Reset</button>
+	</div>
 	<table class="board">
 		<tr ng-repeat="row in board.rows">
-			<td ng-repeat="cell in row track by $index">
-				{{ cell }}
+			<td ng-repeat="cell in row track by $index" class="cell-{{ cell }}">
+				<span ng-show="cell == 1">X</span>
+				<span ng-show="cell == -1">O</span>
+				<span ng-show="cell == 0">.</span>
 			</td>
 		</tr>
 	</table>

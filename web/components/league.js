@@ -10,7 +10,7 @@ var cached = function(f) {
 	};
 };
 
-angular.module('league', ['ngRoute', 'db', 'ngResource'])
+angular.module('league', ['ngRoute', 'db', 'ngResource', 'ui.ace'])
 .config(function($routeProvider) {
 
 	$routeProvider.when('/game/:id', {
@@ -120,6 +120,8 @@ angular.module('league', ['ngRoute', 'db', 'ngResource'])
 
 }).controller('ProgramEditForm', function($scope, $routeParams, $rootScope, $location, db, $resource) {
 
+	$scope.edit_disabled = false;
+
 	$scope.update = function() {
 		var Resource = $resource('/league/program/:id', {
 			'id' : '@id'
@@ -129,19 +131,6 @@ angular.module('league', ['ngRoute', 'db', 'ngResource'])
 			$rootScope.message = 'Saved!';
 		}, function (error) {
 			$rootScope.message = 'Failed!'; 			
-		});
-
-	};
-
-	$scope.compile = function() {
-		var Resource = $resource('/league/program/:id/compile', {'id' : '@id'});
-		Resource.save({'id': $scope.program.id}, {'data': $scope.program.data.data}, 
-		function(data) {
-			$rootScope.message = 'Compiled! ';
-			$scope.program.data.binary = data.binary;
-		}, function (error) {
-			var data = error.data;
-			$rootScope.message = data[0] + ' ' + data[1].value; 			
 		});
 
 	};

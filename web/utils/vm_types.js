@@ -13,6 +13,7 @@ window.PythonVM = window.PythonVM || {};
 		this.__str__ = function() { return 'None'; };
 		this.immutable = true;
 		this.eq = function(o) { return o.__class__ === self.__class; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyNone = PyNone;
 	
@@ -22,7 +23,8 @@ window.PythonVM = window.PythonVM || {};
 		this.value = value;
 		this.__str__ = function() { return value ? 'True' : 'False'; };
 		this.immutable = true;
-		this.eq = function(o) { return o.__class__ === self.__class && o.value === self.value; };
+		this.eq = function(o) { return o.__class__ === self.__class__ && o.value === self.value; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyBool = PyBool;
 	
@@ -33,7 +35,8 @@ window.PythonVM = window.PythonVM || {};
 		this.isNumber = true;
 		this.__str__ = function() { return value; };
 		this.immutable = true;
-		this.eq = function(o) { return o.__class__ === self.__class && o.value === self.value; };
+		this.eq = function(o) { return o.__class__ === self.__class__ && o.value === self.value; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyInt = PyInt;
 	
@@ -44,7 +47,8 @@ window.PythonVM = window.PythonVM || {};
 		this.isNumber = true;
 		this.__str__ = function() { return value; };
 		this.immutable = true;
-		this.eq = function(o) { return o.__class__ === self.__class && o.value === self.value; };
+		this.eq = function(o) { return o.__class__ === self.__class__ && o.value === self.value; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyFloat = PyFloat;
 
@@ -54,7 +58,11 @@ window.PythonVM = window.PythonVM || {};
 		this.value = value;
 		this.__str__ = function() { return value; };
 		this.immutable = true;
+		this.__len__ = function() {
+			return this.value.length;
+		};
 		this.eq = function(o) { return o.__class__ === self.__class__ && o.value === self.value; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyUnicode = PyUnicode;
 
@@ -62,9 +70,29 @@ window.PythonVM = window.PythonVM || {};
 		var self = this;
 		this.__class__ = 'list';
 		this.value = value;
-		this.__str__ = function() { return value; };
-		//TODO: eq
-		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+		this.__str__ = function() {
+			var ret = '[';
+			for (var i = 0; i < self.value.length; i++) {
+				ret += exports.str(self.value[i]) + ', ';
+			}
+			ret += ']';
+			return ret; 
+		};
+		this.__len__ = function() {
+			return this.value.length; 
+		};
+		this.eq = function(o) { 
+			if (o.__class__ !== self.__class) return false;
+			if (self.value.length != o.value.length) return false;
+			for (var i = 0; i < self.value.length; i++) {
+				if (!v1.eq(v2)) return false;
+			}
+			return true;
+		};
+		this.getattr = function(attrName) { return self.__dict__[attrName] || null; };
+		this.__dict__ = {
+			'append': new PyBuiltinFunction(function(item) { self.value.push(item); })
+		};
 	};
 	exports.PyList = PyList;
 
@@ -86,6 +114,15 @@ window.PythonVM = window.PythonVM || {};
 			}
 			return null;
 		};
+		this.del = function(key) {
+			for (var i = 0; i < self.value.length; i++) {
+				if (this.value[i][0].eq(key)) {
+					this.value.splice(i, 0);
+					return;
+				}
+			}
+			throw 'PyException: no such index';
+		};
 		this.set = function(key, value) {
 			var ret = [];
 			for (var i = 0; i < self.value.length; i++) {
@@ -96,9 +133,29 @@ window.PythonVM = window.PythonVM || {};
 			}
 			this.value.push([key, value]);
 		};
-		this.__str__ = function() { return 'dict(' + self.value + ')'; };
-		//TODO: eq
-		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+		this.__str__ = function() {
+			var ret = '{';
+			for (var i = 0; i < self.value.length; i++) {
+				ret += exports.str(self.value[i][0]) + ': ' + exports.str(self.value[i][1]);
+			}
+			ret += '}';
+			return ret; 
+		};
+		this.__len__ = function() {
+			return this.value.length; 
+		};
+		this.eq = function(o) {
+			if (o.__class__ !== self.__class) return false;
+			if (self.value.length != o.value.length) return false;
+			for (var i = 0; i < self.value.length; i++) {
+				var v1 = self.value[1];
+				var v2 = o.get(self.value[0]);
+				if (v2 === null) return false;
+				if (!v1.eq(v2)) return false;
+			}
+			return true;
+		};
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyDict = PyDict;
 
@@ -108,7 +165,8 @@ window.PythonVM = window.PythonVM || {};
 		this.value = value;
 		this.default_kwargs = default_kwargs;
 		this.__str__ = function() { return '<function>'; };
-		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+		this.eq = function(o) { return o.__class__ === self.__class__ && o === self; };
+		this.getattr = function(o) { return null; };
 	};
 	exports.PyFunction = PyFunction;
 	
@@ -125,7 +183,6 @@ window.PythonVM = window.PythonVM || {};
 			if (wrapper === undefined) {
 				for (var x in kwargs) {
 					if (kwargs.hasOwnProperty(x)) {
-						// TODO: throw PyException
 						throw 'PyException: builtin-function does not accept kwarg "' + x + '""';
 					}
 				}
@@ -136,11 +193,15 @@ window.PythonVM = window.PythonVM || {};
 			}
 			return value.apply(null, params);
 		};
-		this.eq = function(o) { return o.__class__ === self.__class && o === self; };
+		this.eq = function(o) { return o.__class__ === self.__class__ && o === self; };
+		this.getattr = function(o) { return null; };
 	};	
 	exports.PyBuiltinFunction = PyBuiltinFunction;
 
 	var nativeToInternal = function(value) {
+		if (value === null) {
+			return new PyNone();
+		}
 		if (typeof value === 'number' && value % 1 === 0) {
 			return new PyInt(value);
 		}
@@ -151,9 +212,14 @@ window.PythonVM = window.PythonVM || {};
 			return new PyUnicode(value);
 		}
 		if (Object.prototype.toString.call(value) === '[object Array]') {
-			return new PyList(value);
+			var val = [];
+			for (var i = 0; i < value.length; i++) {
+				val[i] = nativeToInternal(value[i]);
+			}
+			return new PyList(val);
 		}
 		if (Object.prototype.toString.call(value) === '[object Object]') {
+			// code object, not a dict!
 			return value;
 		}
 		throw 'Unknown native: "' + typeof value + '"';
